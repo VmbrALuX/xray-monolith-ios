@@ -1,0 +1,32 @@
+name: iOS survey - xrCore
+
+# Manual trigger only. A measurement, not a build: syntax-checks each xrCore source file for
+# iOS arm64 and reports what breaks. Nothing is linked, packaged, or run.
+on:
+  workflow_dispatch:
+
+jobs:
+  survey:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Record toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+
+      - name: Run xrCore survey
+        run: bash ios/survey/survey_xrcore.sh
+
+      - name: Publish summary
+        run: cat survey_out/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload full logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: xrcore-ios-survey
+          path: survey_out
+          if-no-files-found: error
