@@ -1,0 +1,52 @@
+name: iOS shell (Milestone 1)
+
+# Manual trigger only. Builds a native UIKit placeholder app and packages an UNSIGNED IPA.
+# Does not touch or compile the engine sources under src/.
+on:
+  workflow_dispatch:
+
+jobs:
+  build-ipa:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: ios
+
+      - name: Record toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+          xcrun --sdk iphoneos --show-sdk-path
+
+      - name: Compile app (arm64, iOS 16+)
+        run: |
+          mkdir -p build/Payload/AnomalyiOS.app
+          xcrun --sdk iphoneos clang -arch arm64 -miphoneos-version-min=16.0 \
+            -fobjc-arc -O1 -g -Wall \
+            -framework UIKit -framework Foundation \
+            ios/App/main.m -o build/Payload/AnomalyiOS.app/AnomalyiOS
+          cp ios/Info.plist build/Payload/AnomalyiOS.app/Info.plist
+
+      - name: Validate bundle
+        run: |
+          plutil -lint build/Payload/AnomalyiOS.app/Info.plist
+          file build/Payload/AnomalyiOS.app/AnomalyiOS
+          lipo -info build/Payload/AnomalyiOS.app/AnomalyiOS
+          otool -l build/Payload/AnomalyiOS.app/AnomalyiOS | grep -A4 LC_BUILD_VERSION
+          codesign -dv build/Payload/AnomalyiOS.app 2>&1 || true
+
+      - name: Package unsigned IPA
+        run: |
+          cd build
+          zip -qry AnomalyiOS-unsigned.ipa Payload
+          unzip -l AnomalyiOS-unsigned.ipa
+          ls -l AnomalyiOS-unsigned.ipa
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnomalyiOS-unsigned-ipa
+          path: build/AnomalyiOS-unsigned.ipa
+          if-no-files-found: error
